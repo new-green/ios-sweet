@@ -1,4 +1,5 @@
 diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
+index 9a748ea..374d629 100644
 --- a/makedefs/MakeInc.def
 +++ b/makedefs/MakeInc.def
 @@ -29,7 +29,7 @@ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
@@ -10,8 +11,7 @@ diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
  
  endif
  
-@@ -61,6 +61,7 @@ MACHINE_FLAGS_ARM64_T8103 = -DARM64_BOARD_CONFIG_T8103                  -mcpu=ap
- MACHINE_FLAGS_ARM64_T6000 = -DARM64_BOARD_CONFIG_T6000 		-mcpu=apple-a14
+@@ -62,6 +62,7 @@ MACHINE_FLAGS_ARM64_T6000 = -DARM64_BOARD_CONFIG_T6000 		-mcpu=apple-a14
  MACHINE_FLAGS_ARM64_VMAPPLE = -DARM64_BOARD_CONFIG_VMAPPLE              -march=armv8.5a
  MACHINE_FLAGS_ARM64_BCM2837 = -DARM64_BOARD_CONFIG_BCM2837
  MACHINE_FLAGS_ARM64_SWEET = -DARM64_BOARD_CONFIG_SWEET                -march=armv8.2-a+crypto
@@ -19,26 +19,24 @@ diff --git a/makedefs/MakeInc.def b/makedefs/MakeInc.def
  
  
  #
-@@ -259,8 +260,9 @@ ifeq ($(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG),)
- # Without embdedded device map, use a default arch string
+@@ -261,7 +262,7 @@ ifeq ($(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG),)
  export ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG := $(shell echo $(CURRENT_ARCH_CONFIG) | tr A-Z a-z)
  ifneq ($(filter arm64,$(ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG)),)
--# sweet's Cortex-A76/A55 have no pointer authentication: stay plain arm64
+ # sweet's Cortex-A76/A55 have no pointer authentication: stay plain arm64
 -ifneq ($(CURRENT_MACHINE_CONFIG),SWEET)
-+# sweet's Cortex-A76/A55 and pacman's Cortex-A715/A510: the kernel does not
-+# use pointer authentication even where the core implements it.
 +ifeq ($(filter $(CURRENT_MACHINE_CONFIG),SWEET PACMAN),)
  export ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG := arm64e
  endif
  endif
 diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
+index e01c124..71faa80 100644
 --- a/osfmk/arm64/proc_reg.h
 +++ b/osfmk/arm64/proc_reg.h
 @@ -213,6 +213,14 @@
  /* D-Cache. */
  #define MMU_CLINE   6
  
-+#elif defined (PACMAN) /* MediaTek MT6886: Cortex-A715 + Cortex-A510, 64B lines */
++#elif defined (PACMAN) /* MediaTek MT6886: Cortex-A715 + Cortex-A510 */
 +
 +/* I-Cache. */
 +#define MMU_I_CLINE 6
@@ -46,13 +44,14 @@ diff --git a/osfmk/arm64/proc_reg.h b/osfmk/arm64/proc_reg.h
 +/* D-Cache. */
 +#define MMU_CLINE   6
 +
- #elif defined (VMAPPLE)
+ #elif defined (SWEET) /* Qualcomm Kryo 470: Cortex-A76 + Cortex-A55 */
  
  /* I-Cache. */
 diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index 24f1abc..a943337 100644
 --- a/osfmk/arm64/sleh.c
 +++ b/osfmk/arm64/sleh.c
-@@ -1856,12 +1856,13 @@ sleh_irq(arm_saved_state_t *state)
+@@ -1856,7 +1856,7 @@ sleh_irq(arm_saved_state_t *state)
  #endif
  
  
@@ -61,11 +60,7 @@ diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
  	/*
  	 * sweet: TrustZone owns GIC Group 0, so the timer and IPIs that other
  	 * ARM64 targets take as FIQs arrive here as Group 1 IRQs.
-+	 * pacman (MT6886): identical, MediaTek ATF owns EL3/Group 0.
- 	 */
- 	uint64_t iar = __builtin_arm_rsr64("ICC_IAR1_EL1");
- 	uint32_t intid = (uint32_t)(iar & 0xFFFFFF);
-@@ -1900,7 +1901,7 @@ sleh_irq(arm_saved_state_t *state)
+@@ -1903,7 +1903,7 @@ sleh_irq(arm_saved_state_t *state)
  	    cdp->interrupt_nub,
  	    cdp->interrupt_source);
  #endif
@@ -75,9 +70,78 @@ diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
  	entropy_collect();
  
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 023086f..57fdc48 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -745,11 +745,11 @@ common_start:
+@@ -143,8 +143,8 @@ LEXT(reset_vector)
+ 	adrp	x19, EXT(ResetHandlerData)@page			// Get address of the reset handler data
+ 	add		x19, x19, EXT(ResetHandlerData)@pageoff
+ 	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
+-#if HAS_CLUSTER || defined(SWEET)
+-	and		x0, x15, #0xFFFF					// Full Aff1:Aff0 (SWEET: core in Aff1)
++#if HAS_CLUSTER || defined(SWEET) || defined(PACMAN)
++	and		x0, x15, #0xFFFF					// Full Aff1:Aff0 (SWEET/PACMAN: core in Aff1)
+ #else
+ 	and		x0, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
+ #endif
+@@ -279,7 +279,7 @@ LEXT(LowExceptionVectorBase)
+ LEXT(bootstrap_instructions)
+ 
+ #endif /* defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR) */
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ /* PSCI CPU_ON entry (physical): x0=context_id, no stack, MMU/caches off.
+  * Keep this separate from __start (which requires x0=boot_args PA).
+  * Firmware may return at EL1 or EL2; check before accessing EL1 state.
+@@ -327,7 +327,7 @@ Lsweet_secondary_el1:
+ 	/* x0 is deliberately unused; reset_vector selects CPU data by MPIDR. */
+ 	msr		SPSel, #1
+ 	b		EXT(LowResetVectorBase)
+-#endif /* SWEET */
++#endif /* SWEET || PACMAN */
+ 
+ 	.align 2
+ 	.globl EXT(resume_idle_cpu)
+@@ -513,9 +513,9 @@ LEXT(start_first_cpu)
+ 	mov		x20, x0
+ 	mov		x21, #0
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/* Stage 0: white 64x32 band, no stack or page tables needed. */
+-	MOV64	x0, (0x9c000000 + 2368 * 4320)
++	MOV64	x0, (MACHINE_SPLASH_FB_BASE + 2368 * 4320)
+ 	mov		w1, #-1
+ 	mov		x2, #32
+ 	mov		x4, #4320
+@@ -678,7 +678,7 @@ Lkernelcache_base_found:
+ 	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
+ 	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/*
+ 	 * Splash framebuffer: one 32MB Normal-NC block in the EXISTING V=P
+ 	 * L2 table. Both framebuffer and RAM use L1 index 0; another call to
+@@ -686,7 +686,7 @@ Lkernelcache_base_found:
+ 	 * SWEET uses 16K pages and all bring-up RAM is below 4GB, so the first
+ 	 * V=P L2 page is bootstrap_pagetables + 2*PGBYTES.
+ 	 */
+-	MOV64	x10, 0x9c000000
++	MOV64	x10, MACHINE_SPLASH_FB_BASE
+ 	MOV64	x11, (ARM_TTE_TYPE_BLOCK | ARM_TTE_VALID | ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) | ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITECOMB) | ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_PNX | ARM_TTE_BLOCK_NX)
+ 	orr		x11, x11, x10
+ 	and		x12, x10, #(ARM_TT_L2_INDEX_MASK)
+@@ -793,7 +793,7 @@ common_start:
+ 	ic		iallu
+ #endif
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/* Complete local TLB/I-cache invalidation before enabling the MMU. */
+ 	dsb		sy
+ 	isb
+@@ -837,11 +837,11 @@ common_start:
  	MSR_SCTLR_EL1_X0
  	isb		sy
  
@@ -92,9 +156,28 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
  #if (!CONFIG_KERNEL_INTEGRITY || (CONFIG_KERNEL_INTEGRITY && !defined(KERNEL_INTEGRITY_WT)))
  	/* Watchtower
 diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
+index 6089db9..01bb180 100644
 --- a/pexpert/arm/pe_fiq.c
 +++ b/pexpert/arm/pe_fiq.c
-@@ -141,7 +141,7 @@ pe_init_fiq()
+@@ -17,7 +17,7 @@
+ #define GICR_WAKE_TIMEOUT_NS (1000000000ULL) // timeout for redistributor wakeup (default 1s)
+ MACHINE_TIMEOUT(gicr_wake_timeout_ns, "gicr-wake-timeout", GICR_WAKE_TIMEOUT_NS, MACHINE_TIMEOUT_UNIT_NSEC, NULL);
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ /* Phone default; QEMU virt wires the architected virtual timer to INTID 27. */
+ SECURITY_READ_ONLY_LATE(uint32_t) sweet_vtimer_intid = SWEET_VTIMER_INTID;
+ #endif
+@@ -102,7 +102,7 @@ pe_init_fiq()
+ 			panic("%s: incorrect reg property size in GIC DT node; expecting 32 bytes but got %u bytes", __func__, prop_size);
+ 		}
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 		/* Read only on the boot CPU, before the GIC and RO-late lockdown. */
+ 		void const *timer_prop;
+ 		unsigned int timer_size;
+@@ -164,7 +164,7 @@ pe_init_fiq()
  		}
  	}
  
@@ -103,9 +186,7 @@ diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
  	/*
  	 * Real hardware with two security states: Group 0 is TrustZone's and
  	 * non-secure writes to it are ignored. Everything we own is Group 1 NS
-@@ -156,7 +156,7 @@ pe_init_fiq()
- 	// Configure timers and legacy FIQ to be group 0
- 	gicr_write32(GICR_IGROUPR0, 0x81FFFFFF);
+@@ -182,7 +182,7 @@ pe_init_fiq()
  
  	// Enable PPI 27
  	gicr_write32(GICR_ISENABLER0, (1 << 27));
@@ -114,7 +195,7 @@ diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
  
  	// Enable system register access
  	uint64_t icc_sre = __builtin_arm_rsr64("ICC_SRE_EL1");
-@@ -167,7 +167,7 @@ pe_init_fiq()
+@@ -190,12 +190,12 @@ pe_init_fiq()
  	__builtin_arm_wsr64("ICC_SRE_EL1", icc_sre);
  	__builtin_arm_isb(ISB_SY);
  
@@ -123,7 +204,13 @@ diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
  	__builtin_arm_wsr64("ICC_BPR1_EL1", 0);
  #else
  	// Set priority masks and binary point for group 0
-@@ -180,7 +180,7 @@ pe_init_fiq()
+ 	__builtin_arm_wsr64("ICC_BPR0_EL1", 0);
+-#endif /* SWEET */
++#endif /* SWEET || PACMAN */
+ 	__builtin_arm_wsr64("ICC_PMR_EL1", 0xFF);
+ 
+ 	// Set EOI mode of this processor
+@@ -203,7 +203,7 @@ pe_init_fiq()
  	icc_ctlr &= ~ICC_CTLR_EOIMODE;
  	__builtin_arm_wsr64("ICC_CTLR_EL1", icc_ctlr);
  
@@ -132,130 +219,30 @@ diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
  	// ABL leaves only ARE_NS set; Linux writes ARE_NS | EnableGrp1A | EnableGrp1
  	uint32_t gicd_ctlr = gicd_read32(GICD_CTLR);
  	gicd_ctlr |= GICD_CTLR_ARE_NS | GICD_CTLR_ENABLEGRP1A | GICD_CTLR_ENABLEGRP1;
-diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
---- a/pexpert/pexpert/arm64/Makefile
-+++ b/pexpert/pexpert/arm64/Makefile
-@@ -17,7 +17,8 @@ PRIVATE_KERNELFILES = \
- 	boot.h \
- 	H13.h \
- 	VMAPPLE.h \
- 	BCM2837.h \
--	SWEET.h
-+	SWEET.h \
-+	PACMAN.h
+@@ -220,7 +220,7 @@ pe_init_fiq()
+ 	gicd_write32(GICD_CTLR, gicd_ctlr);
+ 	__builtin_arm_wsr64("ICC_IGRPEN0_EL1", 1);
+ 	__builtin_arm_isb(ISB_SY);
+-#endif /* SWEET */
++#endif /* SWEET || PACMAN */
+ }
+ #else
+ void
+diff --git a/pexpert/pexpert/arm64/SWEET.h b/pexpert/pexpert/arm64/SWEET.h
+index b99c2f4..6e610e0 100644
+--- a/pexpert/pexpert/arm64/SWEET.h
++++ b/pexpert/pexpert/arm64/SWEET.h
+@@ -50,6 +50,13 @@
+ #define SWEET_VTIMER_INTID        19
+ #define SWEET_IPI_SGI             1       // SGI used for cross-CPU signals
  
- 
- # Headers installed into System.framework/PrivateHeaders (userspace internal SDK only).
-diff --git a/pexpert/pexpert/arm64/PACMAN.h b/pexpert/pexpert/arm64/PACMAN.h
-new file mode 100644
---- /dev/null
-+++ b/pexpert/pexpert/arm64/PACMAN.h
-@@ -0,0 +1,79 @@
 +/*
-+ * Board config for the Nothing Phone (2a) ("pacman", MediaTek MT6886 /
-+ * Dimensity 7200 Pro): Cortex-A715 (2) + Cortex-A510 (6). The cores are
-+ * ARMv9 with SVE2/BTI/MTE/PAC, but xnu-8796 predates those and the shim
-+ * leaves them disabled, so the kernel is built like sweet (armv8.2-a+crypto)
-+ * and uses plain arm64 (no pointer authentication).
-+ *
-+ * Generic ARM like BCM2837: none of Apple's implementation-defined system
-+ * registers exist. 16K pages and GICv3 like sweet/VMAPPLE. The GIC has two
-+ * security states (GICD_TYPER SecurityExtn=1): MediaTek ATF (BL31) owns
-+ * EL3/Group 0, so every interrupt XNU owns, the timer included, is a
-+ * Group 1 IRQ taken through sleh_irq().
-+ *
-+ * All MMIO addresses live in the ADT (see tools/mkadt-pacman.py), not here.
++ * Physical base of the continuous-splash framebuffer used by the very early
++ * start.s stage-0 marker (before any ADT parsing). Sweet's bootloader leaves
++ * the panel scanning out from here.
 + */
++#define MACHINE_SPLASH_FB_BASE    0x9c000000
 +
-+#ifndef _PEXPERT_ARM64_PACMAN_H
-+#define _PEXPERT_ARM64_PACMAN_H
-+
-+#define NO_MONITOR                1
-+#define NO_ECORE                  1
-+
-+#define PACMAN                    1
-+
-+#define ARM_ARCH_TIMER
-+#define __ARM_ARCH__              8
-+#define __ARM_VMSA__              8
-+#define __ARM_VFP__               4
-+#define __ARM_COHERENT_CACHE__    1
-+#define __ARM_DEBUG__             7
-+#define __ARM_ENABLE_SWAP__       1
-+#define __ARM_V8_CRYPTO_EXTENSIONS__ 1
-+#define __ARM_PAN_AVAILABLE__     1
-+#define __ARM_16K_PG__            1
-+
-+#define HAS_GIC_V3                1
-+
-+#ifndef ASSEMBLER
-+#define PLATFORM_PANIC_LOG_DISABLED
-+#endif /* ! ASSEMBLER */
-+
-+/*
-+ * Timer PPI, MediaTek follows the Arm ARM numbering (unlike Qualcomm, whose
-+ * sweet.h uses 19). Device DTB:
-+ *   interrupts = <1 13 4 0  1 14 4 0  1 11 4 0  1 10 4 0>
-+ * (secure EL1 phys, non-secure EL1 phys, secure EL1 virt, non-secure EL1 virt)
-+ * XNU uses the non-secure EL1 virtual timer CNTV -> INTID 10.
-+ *
-+ * This is only the compile-time default; the ADT property
-+ * gic/virtual-timer-intid overrides it when present (pe_fiq.c), which is how
-+ * the same kernel also boots on QEMU virt (INTID 27).
-+ */
-+#define SWEET_VTIMER_INTID        10
-+#define SWEET_IPI_SGI             1       // SGI used for cross-CPU signals
-+
-+#define GIC_SPURIOUS_IRQ          1023    // IRQ no. for GIC spurious interrupt
-+
-+#define GICR_PE_SIZE              0x20000 // Size of each redistributor region
-+
-+/* GICv3 register definitions; see GICv3 spec (Arm IHI 0069G) */
-+#define GICD_CTLR                 0x0
-+
-+/* Non-secure view of GICD_CTLR (DS=0) */
-+#define GICD_CTLR_ENABLEGRP1      0x1
-+#define GICD_CTLR_ENABLEGRP1A     0x2
-+#define GICD_CTLR_ARE_NS          0x10
-+#define GICD_CTLR_RWP             0x80000000
-+
-+#define GICR_TYPER                              0x08
-+#define GICR_WAKER                              0x14
-+#define GICR_IGROUPR0                           0x10080
-+#define GICR_ISENABLER0                         0x10100
-+#define GICR_IPRIORITYR0                        0x10400
-+
-+#define GICR_TYPER_AFFINITY_VALUE_SHIFT         32
-+#define GICR_TYPER_LAST                         0x10
-+
-+#define GICR_WAKER_PROCESSORSLEEP               0x2
-+#define GICR_WAKER_CHILDRENASLEEP               0x4
-+
-+#define ICC_CTLR_EOIMODE                        0x2
-+
-+#define ICC_SRE_SRE                             0x1
-+/* End of GICv3 register definitions */
-+
-+#endif /* ! _PEXPERT_ARM64_PACMAN_H */
-diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
---- a/pexpert/pexpert/arm64/board_config.h
-+++ b/pexpert/pexpert/arm64/board_config.h
-@@ -97,6 +97,19 @@
- #define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
- #endif  /* ARM64_BOARD_CONFIG_BCM2837 */
+ #define GIC_SPURIOUS_IRQ          1023    // IRQ no. for GIC spurious interrupt
  
-+#ifdef ARM64_BOARD_CONFIG_PACMAN
-+#include <pexpert/arm64/PACMAN.h>
-+
-+#define MAX_L2_CLINE                   6
-+#define MAX_CPUS                       8
-+/* Six A510 in cluster 0, two A715 in cluster 1 (device DTB cpu-map). */
-+#define MAX_CPU_CLUSTERS               2
-+
-+#define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
-+
-+#endif  /* ARM64_BOARD_CONFIG_PACMAN */
-+
- #ifdef ARM64_BOARD_CONFIG_SWEET
- #include <pexpert/arm64/SWEET.h>
- 
+ #define GICR_PE_SIZE              0x20000 // Size of each redistributor region

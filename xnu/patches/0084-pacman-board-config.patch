@@ -1,0 +1,144 @@
+diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
+index c7d274f..eb625de 100644
+--- a/pexpert/pexpert/arm64/Makefile
++++ b/pexpert/pexpert/arm64/Makefile
+@@ -18,7 +18,8 @@ PRIVATE_KERNELFILES = \
+ 	H13.h \
+ 	VMAPPLE.h \
+ 	BCM2837.h \
+-	SWEET.h
++	SWEET.h \
++	PACMAN.h
+ 
+ 
+ # Headers installed into System.framework/PrivateHeaders (userspace internal SDK only).
+diff --git a/pexpert/pexpert/arm64/PACMAN.h b/pexpert/pexpert/arm64/PACMAN.h
+new file mode 100644
+index 0000000..a27317d
+--- /dev/null
++++ b/pexpert/pexpert/arm64/PACMAN.h
+@@ -0,0 +1,102 @@
++/*
++ * Board config for the Nothing Phone (2a) ("pacman", MediaTek MT6886 /
++ * Dimensity 7200 Pro): Cortex-A715 (2) + Cortex-A510 (6). The cores are
++ * ARMv9 and implement SVE2/BTI/MTE/PAC, but xnu-8796 predates all of those
++ * and the shim leaves them disabled, so the kernel is built like sweet
++ * (armv8.2-a+crypto, plain arm64) and does not enable them.
++ *
++ * Generic ARM like BCM2837/SWEET (no APPLE_ARM64_ARCH_FAMILY: none of Apple's
++ * implementation-defined system registers exist), 16K pages and GICv3. Like
++ * sweet the GIC has two security states (GICD_TYPER SecurityExtn=1):
++ * MediaTek ATF (BL31) owns EL3/Group 0, so every interrupt XNU owns,
++ * the architected timer included, is a Group 1 IRQ taken through sleh_irq().
++ *
++ * All MMIO addresses come from the ADT (tools/mkadt-pacman.py), not from here.
++ * The only compile-time hardware constant is the splash framebuffer base used
++ * by the pre-ADT stage in start.s.
++ */
++
++#ifndef _PEXPERT_ARM64_PACMAN_H
++#define _PEXPERT_ARM64_PACMAN_H
++
++#define NO_MONITOR                1
++#define NO_ECORE                  1
++
++#define PACMAN                    1
++
++/*
++ * All eight cores (six A510 + two A715) as one homogeneous SMP cluster:
++ * cpus=N is clamped here. Same ISA level (ARMv8.2 baseline, 64-byte lines),
++ * PSCI CPU_ON; the scheduler does not know the A715s are faster.
++ */
++#define PACMAN_SMP_MAX_CPUS        8
++
++#define ARM_ARCH_TIMER
++#define __ARM_ARCH__              8
++#define __ARM_VMSA__              8
++#define __ARM_VFP__               4
++#define __ARM_COHERENT_CACHE__    1
++#define __ARM_DEBUG__             7
++#define __ARM_ENABLE_SWAP__       1
++#define __ARM_V8_CRYPTO_EXTENSIONS__ 1
++#define __ARM_PAN_AVAILABLE__     1
++#define __ARM_16K_PG__            1
++
++#define HAS_GIC_V3                1
++
++#ifndef ASSEMBLER
++#define PLATFORM_PANIC_LOG_DISABLED
++#endif /* ! ASSEMBLER */
++
++/*
++ * MediaTek numbers the architected timer PPIs the way the Arm ARM does, so
++ * this differs from sweet (Qualcomm uses 19). The device DTB says:
++ *   interrupts = <1 13 4 0  1 14 4 0  1 11 4 0  1 10 4 0>
++ * i.e. secure EL1 phys 13, non-secure EL1 phys 14, secure EL1 virt 11,
++ * non-secure EL1 virt 10. XNU uses the non-secure EL1 virtual timer CNTV.
++ *
++ * This is only the fallback: pe_fiq.c prefers the ADT property
++ * gic/virtual-timer-intid, which is how the same kernel also boots on
++ * QEMU virt (INTID 27).
++ */
++#define SWEET_VTIMER_INTID        10
++#define SWEET_IPI_SGI             1       // SGI used for cross-CPU signals
++
++/*
++ * Physical base of the continuous-splash framebuffer (stage-0 marker in
++ * start.s, before the ADT is parsed). The MediaTek LK bootloader keeps the
++ * panel scanning out from here; measured from /chosen/atag,videolfb-fb_base.
++ */
++#define MACHINE_SPLASH_FB_BASE    0xfe06c000
++
++#define GIC_SPURIOUS_IRQ          1023    // IRQ no. for GIC spurious interrupt
++
++#define GICR_PE_SIZE              0x20000 // Size of each redistributor region
++
++/* GICv3 register definitions; see GICv3 spec (Arm IHI 0069G) */
++#define GICD_CTLR                 0x0
++
++/* Non-secure view of GICD_CTLR (DS=0) */
++#define GICD_CTLR_ENABLEGRP1      0x1
++#define GICD_CTLR_ENABLEGRP1A     0x2
++#define GICD_CTLR_ARE_NS          0x10
++#define GICD_CTLR_RWP             0x80000000
++
++#define GICR_TYPER                              0x08
++#define GICR_WAKER                              0x14
++#define GICR_IGROUPR0                           0x10080
++#define GICR_ISENABLER0                         0x10100
++#define GICR_IPRIORITYR0                        0x10400
++
++#define GICR_TYPER_AFFINITY_VALUE_SHIFT         32
++#define GICR_TYPER_LAST                         0x10
++
++#define GICR_WAKER_PROCESSORSLEEP               0x2
++#define GICR_WAKER_CHILDRENASLEEP               0x4
++
++#define ICC_CTLR_EOIMODE                        0x2
++
++#define ICC_SRE_SRE                             0x1
++/* End of GICv3 register definitions */
++
++#endif /* ! _PEXPERT_ARM64_PACMAN_H */
+diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
+index 88e524a..6c1442a 100644
+--- a/pexpert/pexpert/arm64/board_config.h
++++ b/pexpert/pexpert/arm64/board_config.h
+@@ -97,6 +97,17 @@
+ #define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
+ #endif  /* ARM64_BOARD_CONFIG_BCM2837 */
+ 
++#ifdef ARM64_BOARD_CONFIG_PACMAN
++#include <pexpert/arm64/PACMAN.h>
++
++#define MAX_L2_CLINE                   6
++#define MAX_CPUS                       8
++#define MAX_CPU_CLUSTERS               1
++
++#define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
++
++#endif  /* ARM64_BOARD_CONFIG_PACMAN */
++
+ #ifdef ARM64_BOARD_CONFIG_SWEET
+ #include <pexpert/arm64/SWEET.h>
+ 

@@ -59,19 +59,33 @@ def check_qemu_dependency(cpu='cortex-a76'):
 
 
 def check_kernel_tools(kernel_path):
-    """Verify llvm-nm is available when --kernel is specified."""
-    if not shutil.which('llvm-nm'):
-        print('[!] Error: llvm-nm not found in PATH, required for --kernel font extraction.', file=sys.stderr)
-        print('    Install instructions:', file=sys.stderr)
-        print('      Arch Linux:    sudo pacman -S llvm', file=sys.stderr)
-        print('      Ubuntu/Debian: sudo apt install llvm', file=sys.stderr)
-        print('      Fedora:         sudo dnf install llvm', file=sys.stderr)
-        print('      macOS:          brew install llvm', file=sys.stderr)
-        return False
+    """Verify the kernel file is readable (symbol lookup needs no external tool)."""
     if not os.path.isfile(kernel_path):
         print(f'[!] Error: kernel file does not exist: {kernel_path}', file=sys.stderr)
         return False
     return True
+
+
+def macho_find_symbol(path, symbol):
+    """VAs of `symbol` in a Mach-O, read here so llvm-nm is not required."""
+    d = open(path, 'rb').read()
+    magic, _, _, _, ncmds, _, _, _ = struct.unpack_from('<8I', d, 0)
+    assert magic == 0xfeedfacf, 'not a 64-bit Mach-O'
+    off, symtab = 32, None
+    for _ in range(ncmds):
+        cmd, size = struct.unpack_from('<II', d, off)
+        if cmd == 0x2:		# LC_SYMTAB
+            symtab = struct.unpack_from('<4I', d, off + 8)
+        off += size
+    if symtab is None:
+        return []
+    symoff, nsyms, stroff, _ = symtab
+    out = []
+    for i in range(nsyms):
+        n_strx, _, _, _, n_value = struct.unpack_from('<IBBHQ', d, symoff + 16 * i)
+        if d[stroff + n_strx:].split(b'\0')[0].decode(errors='replace') == symbol:
+            out.append(n_value)
+    return out
 
 
 def build_image(payload):
@@ -224,7 +238,7 @@ def main():
     ap.add_argument('--gdb', action='store_true', help='start halted, gdb stub on :1234, no timeout')
     ap.add_argument('--hmp', action='append', default=[], help='extra monitor command run after stop (repeatable), e.g. "x /8gx 0xfffffe..."')
     ap.add_argument('--cpu', default='cortex-a76', help='QEMU CPU model (default: cortex-a76)')
-    ap.add_argument('--kernel', help='matching unstripped kernel, for exact framebuffer text decoding (uses llvm-nm)')
+    ap.add_argument('--kernel', help='matching unstripped kernel, for exact framebuffer text decoding (symbols read from the Mach-O)')
     ap.add_argument('--fail-on-panic', action='store_true', help='exit 2 for a visible panic, 3 for incomplete/blank decoding; requires --kernel')
     ap.add_argument('--live-serial', action='store_true', help='stream serial console output to stdout in real time')
     ap.add_argument('--check-env', action='store_true', help='check QEMU installation and dependencies without running a payload')
@@ -232,10 +246,6 @@ def main():
 
     if a.check_env:
         ok = check_qemu_dependency(a.cpu)
-        if shutil.which('llvm-nm'):
-            print('[*] llvm-nm found in PATH', file=sys.stderr)
-        else:
-            print('[!] Optional: llvm-nm not found (needed only when using --kernel for text decoding)', file=sys.stderr)
         return 0 if ok else 1
 
     if not a.payload or not a.outdir:
@@ -253,9 +263,7 @@ def main():
     payload = open(a.payload, 'rb').read()
     font = None
     if a.kernel:
-        symbols = subprocess.check_output(['llvm-nm', '--defined-only', a.kernel], text=True)
-        fonts = [int(line.split()[0], 16) for line in symbols.splitlines()
-                 if line.split()[-1:] == ['_iso_font']]
+        fonts = macho_find_symbol(a.kernel, '_iso_font')
         if len(fonts) != 1:
             ap.error('kernel must contain exactly one _iso_font symbol')
         font = payload_data(payload, fonts[0], 256 * 16)

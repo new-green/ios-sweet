@@ -1,7 +1,52 @@
+diff --git a/iokit/Kernel/arm/SweetCPU.cpp b/iokit/Kernel/arm/SweetCPU.cpp
+index 2545cf9..9bb6c59 100644
+--- a/iokit/Kernel/arm/SweetCPU.cpp
++++ b/iokit/Kernel/arm/SweetCPU.cpp
+@@ -5,7 +5,7 @@
+  */
+ #include <pexpert/arm64/board_config.h>
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ #include <IOKit/IOCPU.h>
+ #include <IOKit/IOLib.h>
+ #include <libkern/c++/OSData.h>
+@@ -268,4 +268,4 @@ SweetCPU::getCPUName(void)
+ {
+ 	return cpuName;
+ }
+-#endif /* SWEET */
++#endif /* SWEET || PACMAN */
+diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+index 0631685..9947515 100644
+--- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
++++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+@@ -1,11 +1,12 @@
+ /*
+- * Minimal device-tree platform expert for Redmi Note 10 Pro (sweet).
++ * Minimal device-tree platform expert for Redmi Note 10 Pro (sweet) and
++ * Nothing Phone (2a) (pacman, MediaTek MT6886).
+  * Uses XNU's normal platform, power-domain and nub initialization. Hardware
+  * interrupt and power-management services are supplied by separate drivers.
+  */
+ #include <pexpert/arm64/board_config.h>
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ #include <IOKit/IOPlatformExpert.h>
+ #include <IOKit/IODeviceTreeSupport.h>
+ #include <IOKit/IOLib.h>
+@@ -79,4 +80,4 @@ SweetPlatformExpert::processTopLevel(IORegistryEntry *root)
+  * "compatible" string and "model" (D22AP / iPhone10,3 in the ADT), which
+  * is what the iPhone userland (MobileGestalt) expects.
+  */
+-#endif /* SWEET */
++#endif /* SWEET || PACMAN */
 diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index 92f3e26..9f2b319 100644
 --- a/iokit/KernelConfigTables.cpp
 +++ b/iokit/KernelConfigTables.cpp
-@@ -34,6 +34,14 @@
+@@ -34,6 +34,55 @@
  
  const char * gIOKernelConfigTables =
      "("
@@ -12,81 +57,48 @@ diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
 +    "     'IONameMatch'     = 'nothing,pacman';"
 +    "     'IOProbeScore'    = 10000:32;"
 +    "   },"
++    "   {"
++    "     'IOClass'         = SweetCPU;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'arm,cortex-a510';"
++    "     'IOProbeScore'    = 10000:32;"
++    "   },"
++    "   {"
++    "     'IOClass'         = AppleKeyStore;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = AppleKeyStore;"
++    "   },"
++    "   {"
++    "     'IOClass'         = IOWatchdog;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = IOWatchdog;"
++    "   },"
++    "   {"
++    "     'IOClass'         = IOCoreSurfaceRoot;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = IOCoreSurfaceRoot;"
++    "   },"
++    "   {"
++    "     'IOClass'         = AppleCLCD;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'pacman,display';"
++    "   },"
++    "   {"
++    "     'IOClass'         = SweetHIDButtons;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = SweetHIDButtons;"
++    "   },"
++    "   {"
++    "     'IOClass'         = SweetHIDTouch;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = SweetHIDTouch;"
++    "   },"
++    "   {"
++    "     'IOClass'         = SweetBattery;"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOMatchCategory' = SweetBattery;"
++    "   },"
 +#endif
  #if defined(ARM64_BOARD_CONFIG_SWEET)
      "   {"
      "     'IOClass'         = SweetPlatformExpert;"
-diff --git a/iokit/Kernel/arm/SweetCPU.cpp b/iokit/Kernel/arm/SweetCPU.cpp
---- a/iokit/Kernel/arm/SweetCPU.cpp
-+++ b/iokit/Kernel/arm/SweetCPU.cpp
-@@ -1,5 +1,10 @@
- /*
-  * Boot CPU driver for the non-Apple ARM64 sweet (SM7150).
-+ *
-+ * PACMAN (MT6886) reuses this driver: the MPIDR is read live from MPIDR_EL1
-+ * (see SweetCPU's CPU_ON path), so per-core affinity comes from hardware, not
-+ * a compile-time constant. The Pacman ADT gives each cpu node the real core
-+ * compatible string (arm,cortex-a510 / arm,cortex-a715) instead of
-+ * qcom,kryo470, so the match key below has a Pacman branch.
-  */
- 
- #include <pexpert/arm64/board_config.h>
-@@ -178,7 +183,11 @@
-     "   {"
-     "     'IOClass'         = SweetCPU;"
-     "     'IOProviderClass' = IOPlatformDevice;"
-+#if defined(ARM64_BOARD_CONFIG_PACMAN)
-+    "     'IONameMatch'     = 'arm,cortex-a510';"
-+#else
-     "     'IONameMatch'     = 'qcom,kryo470';"
-+#endif
-     "     'IOProbeScore'    = 10000:32;"
-     "   },"
-diff --git a/iokit/Kernel/arm/SweetPlatformExpert.cpp b/iokit/Kernel/arm/SweetPlatformExpert.cpp
---- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
-+++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
-@@ -1,6 +1,10 @@
- /*
-  * Minimal device-tree platform expert for Redmi Note 10 Pro (sweet).
-+ *
-+ * PACMAN (Nothing Phone (2a), MT6886) instantiates the same class under
-+ * ARM64_BOARD_CONFIG_PACMAN; the ADT root compatible string is
-+ * 'nothing,pacman' and getTargetName/getProductName report pacman identity.
-+ *
-  * Uses XNU's normal platform, power-domain and nub initialization. Hardware
-  * interrupt and power-management services are supplied by separate drivers.
-  */
-@@ -7,7 +11,7 @@
- 
- #include <pexpert/arm64/board_config.h>
- 
--#if defined(SWEET)
-+#if defined(SWEET) || defined(PACMAN)
- #include <IOKit/IOPlatformExpert.h>
- #include <IOKit/IODeviceTreeSupport.h>
- #include <IOKit/IOLib.h>
-@@ -63,7 +67,11 @@
- 	if (name == NULL || maxLength <= 0) {
- 		return false;
- 	}
-+#if defined(PACMAN)
-+	strlcpy(name, "pacman", (size_t)maxLength);
-+#else
- 	strlcpy(name, "sweet", (size_t)maxLength);
-+#endif
- 	return true;
- }
- 
-@@ -73,8 +81,13 @@
- 	if (name == NULL || maxLength <= 0) {
- 		return false;
- 	}
-+#if defined(PACMAN)
-+	strlcpy(name, "Nothing Phone (2a)", (size_t)maxLength);
-+#else
- 	strlcpy(name, "Redmi Note 10 Pro", (size_t)maxLength);
-+#endif
- 	return true;
- }
--#endif /* SWEET */
-+#endif /* SWEET || PACMAN */
