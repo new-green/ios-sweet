@@ -29,6 +29,51 @@ STUB_PA = 0x40200000	# above the dtb QEMU places at RAM base
 BOOT_LINE_LENGTH = 608
 
 
+def configure_fb(payload):
+    """Take the framebuffer geometry from the payload's ADT, not from sweet.
+
+    The device tree carries the real bootloader framebuffer (sweet 0x9c000000,
+    pacman 0xfe06c000) so the same harness records and decodes both ports.
+    Missing/invalid ADT keeps the historical sweet defaults.
+    """
+    global FB_BASE, FB_W, FB_H, FB_STRIDE
+    adt_off, adt_size = struct.unpack_from('<2Q', payload, 0x20)
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import adt  # noqa: E402
+        root, _ = adt.parse(payload[adt_off:adt_off + adt_size])
+    except Exception as e:
+        print(f'[!] ADT parse failed ({e}); using sweet framebuffer defaults', file=sys.stderr)
+        return
+
+    def find(node):
+        if node.name in ('sweet-fbcon', 'pacman-fbcon'):
+            return node
+        for child in node.children:
+            hit = find(child)
+            if hit:
+                return hit
+        return None
+
+    node = find(root)
+    if node is None:
+        print('[!] no sweet-fbcon/pacman-fbcon node; using sweet framebuffer defaults', file=sys.stderr)
+        return
+    reg = node.prop('reg')
+    width = node.prop('width')
+    height = node.prop('height')
+    stride = node.prop('stride')
+    if not (reg and len(reg) >= 16 and width and height):
+        print('[!] incomplete framebuffer node; using sweet defaults', file=sys.stderr)
+        return
+    FB_BASE, _ = struct.unpack_from('<2Q', reg)
+    FB_W, = struct.unpack_from('<I', width)
+    FB_H, = struct.unpack_from('<I', height)
+    FB_STRIDE = struct.unpack_from('<I', stride)[0] if stride else FB_W * 4
+    print(f'[*] framebuffer {FB_W}x{FB_H} stride {FB_STRIDE} at {FB_BASE:#x} (ADT)', file=sys.stderr)
+
+
+
 def check_qemu_dependency(cpu='cortex-a76'):
     """Verify qemu-system-aarch64 binary and CPU model support."""
     qemu_bin = shutil.which('qemu-system-aarch64')
@@ -261,6 +306,7 @@ def main():
         return 1
 
     payload = open(a.payload, 'rb').read()
+    configure_fb(payload)
     font = None
     if a.kernel:
         fonts = macho_find_symbol(a.kernel, '_iso_font')

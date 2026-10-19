@@ -212,8 +212,11 @@ def build(seed=None, qemu=False, highmem=False):
             ('canvas-height', u32(2436)),
         ])])
 
-    fbcon = node('pacman-fbcon', [
+    # The shared pre-ADT console driver (xnu patch 0003) looks this node up by
+    # name "sweet-fbcon"; the pacman branding stays in the compatible property.
+    fbcon = node('sweet-fbcon', [
         ph(),
+        ('compatible', cstr('pacman,fbcon')),
         ('reg', u64(FB, FB_SIZE)),
         ('width', u32(FB_W)),
         ('height', u32(FB_H)),

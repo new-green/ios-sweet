@@ -4,6 +4,16 @@
 #
 #   mkiosroot.sh OS.dmg SYSTEMOS.dmg APPOS.dmg OUT.img [SIZE]     (SIZE default 16G)
 #
+# Optional package manager (off by default; both artifacts are user-supplied):
+#   SILEO_BOOTSTRAP=procursus-rootful.tar.xz \
+#   SILEO_DEB=Sileo.deb \
+#   SILEO_SOURCES=/path/to/sileo.sources \
+#       mkiosroot.sh ...
+# SILEO_BOOTSTRAP is unpacked first (dpkg/apt/dpkg-deb database), then the Sileo
+# .deb payload, then SILEO_SOURCES is installed as
+# /etc/apt/sources.list.d/sileo.sources. Owners/modes come from the archives.
+# XNU runs with AMFI disabled, so Sileo needs no signature/patch to launch.
+#
 # The IPSW images are raw APFS with LZBITMAP-compressed files: they are read
 # through apfs-fuse (decompressing), so the HFS+ copy is uncompressed. On a
 # device /private/preboot is its own volume holding the cryptexes, which
@@ -109,6 +119,33 @@ for c in OS App; do
 		fi
 	done
 done
+
+# Optional third-party package manager (rootful): a Procursus-style bootstrap
+# provides /usr/bin/dpkg + apt, the .deb adds Sileo.app, the sources file makes
+# the first repo visible. Nothing is downloaded automatically.
+if [[ -n ${SILEO_BOOTSTRAP:-} ]]; then
+	[[ -f $SILEO_BOOTSTRAP ]] || { echo "SILEO_BOOTSTRAP not found: $SILEO_BOOTSTRAP" >&2; exit 1; }
+	echo "installing bootstrap $SILEO_BOOTSTRAP"
+	sudo tar -xpf "$SILEO_BOOTSTRAP" -C "$work/root" --numeric-owner
+fi
+if [[ -n ${SILEO_DEB:-} ]]; then
+	[[ -f $SILEO_DEB ]] || { echo "SILEO_DEB not found: $SILEO_DEB" >&2; exit 1; }
+	command -v dpkg-deb >/dev/null || { echo "dpkg-deb missing (Arch: sudo pacman -S dpkg)" >&2; exit 1; }
+	echo "installing Sileo payload from $SILEO_DEB"
+	sudo dpkg-deb -x "$SILEO_DEB" "$work/root"
+	sudo test -d "$work/root/Applications/Sileo.app" ||
+		echo "warning: $SILEO_DEB has no /Applications/Sileo.app (rootless deb?)" >&2
+fi
+if [[ -n ${SILEO_SOURCES:-} ]]; then
+	[[ -f $SILEO_SOURCES ]] || { echo "SILEO_SOURCES not found: $SILEO_SOURCES" >&2; exit 1; }
+	sudo install -d -o 0 -g 0 -m 0755 "$work/root/etc/apt/sources.list.d"
+	sudo install -o 0 -g 0 -m 0644 "$SILEO_SOURCES" \
+		"$work/root/etc/apt/sources.list.d/sileo.sources"
+fi
+if [[ -n ${SILEO_BOOTSTRAP:-} || -n ${SILEO_DEB:-} ]]; then
+	sudo test -x "$work/root/usr/bin/dpkg" ||
+		echo "warning: no /usr/bin/dpkg in the image; Sileo will not be able to install packages" >&2
+fi
 
 # logd's log stores, normally made at restore: it checks owner _logd (272)
 # and mode, plus a .migrated marker, else asks a helper and crashes
