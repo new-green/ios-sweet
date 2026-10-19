@@ -17,7 +17,7 @@ new file mode 100644
 index 0000000..a27317d
 --- /dev/null
 +++ b/pexpert/pexpert/arm64/PACMAN.h
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,105 @@
 +/*
 + * Board config for the Nothing Phone (2a) ("pacman", MediaTek MT6886 /
 + * Dimensity 7200 Pro): Cortex-A715 (2) + Cortex-A510 (6). The cores are
@@ -50,6 +50,9 @@ index 0000000..a27317d
 + * PSCI CPU_ON; the scheduler does not know the A715s are faster.
 + */
 +#define PACMAN_SMP_MAX_CPUS        8
++/* SweetCPU.cpp/SweetPlatformExpert.cpp are shared with the SWEET port and
++ * still spell the limit SWEET_SMP_MAX_CPUS; keep the same 8-core limit. */
++#define SWEET_SMP_MAX_CPUS         PACMAN_SMP_MAX_CPUS
 +
 +#define ARM_ARCH_TIMER
 +#define __ARM_ARCH__              8

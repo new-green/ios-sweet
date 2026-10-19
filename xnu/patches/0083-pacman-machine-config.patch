@@ -246,3 +246,26 @@ index b99c2f4..6e610e0 100644
  #define GIC_SPURIOUS_IRQ          1023    // IRQ no. for GIC spurious interrupt
  
  #define GICR_PE_SIZE              0x20000 // Size of each redistributor region
+diff --git a/pexpert/pexpert/arm/protos.h b/pexpert/pexpert/arm/protos.h
+--- a/pexpert/pexpert/arm/protos.h
++++ b/pexpert/pexpert/arm/protos.h
+@@ -38,7 +38,7 @@
+ void pe_init_fiq(void);
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ extern uint32_t sweet_vtimer_intid;
+ #endif
+ 
+ #ifdef PRIVATE
+ /**
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -955,6 +955,6 @@
+ 	const boolean_t cpumask_boot_arg_present = PE_parse_boot_argn("cpumask", &cpumask_boot_arg, sizeof(cpumask_boot_arg));
+
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/* Opt in to SMP: cpus=N (N <= SWEET_SMP_MAX_CPUS; cores 6-7 are the A76s). */
+ 	if (!cpus_boot_arg_present || cpu_boot_arg == 0) {
+ 		cpu_boot_arg = 1;
