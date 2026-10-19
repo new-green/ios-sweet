@@ -1,0 +1,807 @@
+diff --git a/bsd/kern/kern_trustcache.c b/bsd/kern/kern_trustcache.c
+index 9066367..a78ef63 100644
+--- a/bsd/kern/kern_trustcache.c
++++ b/bsd/kern/kern_trustcache.c
+@@ -248,7 +248,7 @@ trust_cache_runtime_init(void)
+ 	allow_legacy_caches = true;
+ #endif
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/*
+ 	 * Standalone SWEET bring-up has no AppleImage4/AMFI kexts. Represent
+ 	 * the missing service explicitly: no caches can be loaded or matched.
+@@ -493,7 +493,7 @@ check_trust_cache_runtime_for_uuid(
+ 		return KERN_INVALID_ARGUMENT;
+ 	}
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	if (trust_cache_rt == NULL) {
+ 		return KERN_NOT_FOUND;
+ 	}
+@@ -583,7 +583,7 @@ load_trust_cache_with_type(
+ 		}
+ 	}
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	if (trust_cache_rt == NULL) {
+ 		return KERN_NOT_SUPPORTED;
+ 	}
+@@ -695,7 +695,7 @@ load_legacy_trust_cache(
+ 		panic("overflow on the module: %p | %lu", module_data, module_size);
+ 	}
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	if (trust_cache_rt == NULL) {
+ 		return KERN_NOT_SUPPORTED;
+ 	}
+@@ -729,7 +729,7 @@ query_trust_cache(
+ 		return KERN_INVALID_ARGUMENT;
+ 	}
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	if (trust_cache_rt == NULL) {
+ 		if (query_type >= kTCQueryTypeTotal) {
+ 			return KERN_INVALID_ARGUMENT;
+@@ -946,7 +946,7 @@ static_trust_cache_capabilities(
+ 	*capabilities0_ret = kTCCapabilityNone;
+ 	*capabilities1_ret = kTCCapabilityNone;
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	if (trust_cache_rt == NULL) {
+ 		return KERN_NOT_SUPPORTED;
+ 	}
+diff --git a/bsd/kern/sweet_amfi.c b/bsd/kern/sweet_amfi.c
+index cb67b4d..caebc86 100644
+--- a/bsd/kern/sweet_amfi.c
++++ b/bsd/kern/sweet_amfi.c
+@@ -22,7 +22,7 @@
+  * Interfaces no kernel path uses on SWEET (they serve other Apple kexts)
+  * panic with a clear message instead of being NULL.
+  */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include <kern/debug.h>
+ #include <kern/startup.h>
+ #include <libkern/amfi/amfi.h>
+diff --git a/bsd/net/rtsock.c b/bsd/net/rtsock.c
+index 992b9cb..3ade45f 100644
+--- a/bsd/net/rtsock.c
++++ b/bsd/net/rtsock.c
+@@ -510,7 +510,7 @@ route_output(struct mbuf *m, struct socket *so)
+ 		SIN6(info.rti_info[RTAX_DST])->sin6_addr.s6_addr16[1] = 0;
+ 	}
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	/* SWEET: which process changes IPv4 routes (network bring-up). */
+ 	if ((rtm->rtm_type == RTM_ADD || rtm->rtm_type == RTM_DELETE || rtm->rtm_type == RTM_CHANGE) &&
+ 	    info.rti_info[RTAX_DST] != NULL && info.rti_info[RTAX_DST]->sa_family == AF_INET) {
+diff --git a/bsd/netinet/in.c b/bsd/netinet/in.c
+index 6f7238c..66a84ab 100644
+--- a/bsd/netinet/in.c
++++ b/bsd/netinet/in.c
+@@ -1210,7 +1210,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
+ 	/* In case it's NULL, make sure it came from the kernel */
+ 	VERIFY(so != NULL || p == kernproc);
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	/* SWEET: which process sets IPv4 addresses on which interface. */
+ 	if ((cmd == SIOCAIFADDR || cmd == SIOCDIFADDR) && ifp != NULL) {
+ 		static int sweet_in_logged;
+diff --git a/bsd/pthread/sweet_pthread_init.c b/bsd/pthread/sweet_pthread_init.c
+index 5a82439..a56d149 100644
+--- a/bsd/pthread/sweet_pthread_init.c
++++ b/bsd/pthread/sweet_pthread_init.c
+@@ -1,5 +1,5 @@
+ /* Built-in provider: Apple libpthread-514.100.2, paired with xnu-8796.141.3. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_pthread_compat.h"
+ #include "sweet_libpthread/kern/kern_init.c"
+ 
+diff --git a/bsd/pthread/sweet_pthread_support.c b/bsd/pthread/sweet_pthread_support.c
+index beae777..f105a55 100644
+--- a/bsd/pthread/sweet_pthread_support.c
++++ b/bsd/pthread/sweet_pthread_support.c
+@@ -1,5 +1,5 @@
+ /* Built-in provider: Apple libpthread-514.100.2, paired with xnu-8796.141.3. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_pthread_compat.h"
+ #include "sweet_libpthread/kern/kern_support.c"
+ #endif /* ARM64_BOARD_CONFIG_SWEET */
+diff --git a/bsd/pthread/sweet_pthread_synch.c b/bsd/pthread/sweet_pthread_synch.c
+index 08baa1b..f589784 100644
+--- a/bsd/pthread/sweet_pthread_synch.c
++++ b/bsd/pthread/sweet_pthread_synch.c
+@@ -1,5 +1,5 @@
+ /* Built-in provider: Apple libpthread-514.100.2, paired with xnu-8796.141.3. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_pthread_compat.h"
+ #include "sweet_libpthread/kern/kern_synch.c"
+ #endif /* ARM64_BOARD_CONFIG_SWEET */
+diff --git a/bsd/sys/pthread_internal.h b/bsd/sys/pthread_internal.h
+index 135405e..18490f2 100644
+--- a/bsd/sys/pthread_internal.h
++++ b/bsd/sys/pthread_internal.h
+@@ -34,7 +34,7 @@
+ 
+ struct ksyn_waitq_element {
+ #if __LP64__
+-	#if defined(ARM64_BOARD_CONFIG_SWEET)
++	#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	/* libpthread-514.100.2 includes the trailing kwe_uth pointer. */
+ 	char opaque[56];
+ #else
+diff --git a/bsd/vfs/kpi_vfs.c b/bsd/vfs/kpi_vfs.c
+index 90cd9fc..94b3465 100644
+--- a/bsd/vfs/kpi_vfs.c
++++ b/bsd/vfs/kpi_vfs.c
+@@ -4459,7 +4459,7 @@ vn_rename(struct vnode *fdvp, struct vnode **fvpp, struct componentname *fcnp, s
+ 					_err = VNOP_RENAME(fdvp, *fvpp, fcnp, tdvp, *tvpp, tcnp, ctx);
+ 				}
+ 			}
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 			/*
+ 			 * SWEET: HFS has no RENAME_SWAP, which Foundation's atomic
+ 			 * writes use (usermanagerd: "Failed to atomically swap writing
+diff --git a/bsd/vm/vm_unix.c b/bsd/vm/vm_unix.c
+index 636bd3d..7902a3c 100644
+--- a/bsd/vm/vm_unix.c
++++ b/bsd/vm/vm_unix.c
+@@ -1755,7 +1755,7 @@ out:
+ 	return error;
+ }
+ 
+-#if !XNU_TARGET_OS_OSX || defined(ARM64_BOARD_CONFIG_SWEET)
++#if !XNU_TARGET_OS_OSX || defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ /*
+  * SWEET runs the iOS userland on the macOS config: SpringBoard calls
+  * pid_hibernate when an app leaves the foreground, and nosys (SIGSYS)
+diff --git a/iokit/Kernel/IOService.cpp b/iokit/Kernel/IOService.cpp
+index 59c834e..a22a15a 100644
+--- a/iokit/Kernel/IOService.cpp
++++ b/iokit/Kernel/IOService.cpp
+@@ -5126,7 +5126,7 @@ IOService::publishHiddenMedia(IOService * parent)
+ 	bool                wasHiding;
+ 
+ 	iomediaClass = OSMetaClass::getMetaClassWithName(gIOMediaKey);
+-#if !defined(ARM64_BOARD_CONFIG_SWEET)
++#if !defined(ARM64_BOARD_CONFIG_SWEET) && !defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	assert(iomediaClass);
+ #endif
+ 
+@@ -5137,7 +5137,7 @@ IOService::publishHiddenMedia(IOService * parent)
+ 	}
+ 	UNLOCKNOTIFY();
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	/* SWEET has no IOStorageFamily: without the IOMedia class no media exists to unhide. */
+ 	if (!iomediaClass) {
+ 		wasHiding = false;
+@@ -5188,7 +5188,7 @@ IOService::setRootMedia(IOService * root)
+ 	bool unhide;
+ 
+ 	ioblockstoragedriverClass = OSMetaClass::getMetaClassWithName(gIOBlockStorageDriverKey);
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	/*
+ 	 * SWEET has no IOStorageFamily, so no service can be a block storage
+ 	 * driver: the root (e.g. a RAM disk) is not block media, as for image boot.
+diff --git a/iokit/Kernel/IOUserClient.cpp b/iokit/Kernel/IOUserClient.cpp
+index 163fce1..264ea59 100644
+--- a/iokit/Kernel/IOUserClient.cpp
++++ b/iokit/Kernel/IOUserClient.cpp
+@@ -2600,7 +2600,7 @@ is_io_service_match_property_table_bin(
+ }
+ 
+ static 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ /*
+  * SWEET IOKit trace: registry and matching calls made by the processes
+  * named in boot-arg sweetiolog (comma separated, default "backboardd,SpringBoard";
+@@ -2675,7 +2675,7 @@ internal_io_service_get_matching_services(
+ 	if ((dict = OSDynamicCast( OSDictionary, obj))) {
+ 		IOTaskRegistryCompatibilityMatching(current_task(), dict);
+ 		OSIterator *found = IOService::getMatchingServices( dict );
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 		char sname[32];
+ 		if (sweet_iolog(sname, sizeof(sname))) {
+ 			unsigned int count = 0;
+@@ -2775,7 +2775,7 @@ internal_io_service_get_matching_service(
+ 		IOTaskRegistryCompatibilityMatching(current_task(), dict);
+ 		*service = IOService::copyMatchingService( dict );
+ 		kr = *service ? kIOReturnSuccess : kIOReturnNotFound;
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 		char sname[32];
+ 		if (sweet_iolog(sname, sizeof(sname))) {
+ 			sweet_iolog_dict(sname, "matching1", dict,
+@@ -2885,7 +2885,7 @@ internal_io_service_add_notification(
+ 			continue;
+ 		}
+ 		IOTaskRegistryCompatibilityMatching(current_task(), dict);
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 		{
+ 			char sname[32];
+ 			if (sweet_iolog(sname, sizeof(sname))) {
+@@ -3360,7 +3360,7 @@ is_io_registry_entry_from_path(
+ 	}
+ 
+ 	entry = IORegistryEntry::fromPath( path );
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	{
+ 		char sname[32];
+ 		if (sweet_iolog(sname, sizeof(sname))) {
+@@ -4178,7 +4178,7 @@ is_io_registry_entry_get_child_iterator(
+ 
+ 	*iterator = IOUserIterator::withIterator(entry->getChildIterator(
+ 		    IORegistryEntry::getPlane( plane )));
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 	{
+ 		char sname[32];
+ 		if (sweet_iolog(sname, sizeof(sname))) {
+@@ -4401,7 +4401,7 @@ is_io_service_open_extended(
+ #endif
+ 		res = service->newUserClient( owningTask, (void *) owningTask,
+ 		    connect_type, propertiesDict, &client );
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ 		{
+ 			char sname[32];
+ 			if (sweet_iolog(sname, sizeof(sname))) {
+diff --git a/iokit/Kernel/arm/SweetEntitlements.cpp b/iokit/Kernel/arm/SweetEntitlements.cpp
+index 6186541..f2f7b0e 100644
+--- a/iokit/Kernel/arm/SweetEntitlements.cpp
++++ b/iokit/Kernel/arm/SweetEntitlements.cpp
+@@ -10,7 +10,7 @@
+  */
+ #include <pexpert/arm64/board_config.h>
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ #include <IOKit/IOLib.h>
+ #include <libkern/c++/OSArray.h>
+ #include <libkern/c++/OSBoolean.h>
+diff --git a/libkern/crypto/corecrypto_aes.c b/libkern/crypto/corecrypto_aes.c
+index 384abb6..45900c8 100644
+--- a/libkern/crypto/corecrypto_aes.c
++++ b/libkern/crypto/corecrypto_aes.c
+@@ -32,7 +32,7 @@
+ #include <corecrypto/ccaes.h>
+ #include <kern/debug.h>
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ /* SWEET has a built-in portable AES provider for the legacy CBC/ECB API. */
+ extern const struct ccmode_cbc sweet_aes_cbc_encrypt;
+ extern const struct ccmode_cbc sweet_aes_cbc_decrypt;
+diff --git a/libkern/crypto/corecrypto_md5.c b/libkern/crypto/corecrypto_md5.c
+index e9bbc42..8421abe 100644
+--- a/libkern/crypto/corecrypto_md5.c
++++ b/libkern/crypto/corecrypto_md5.c
+@@ -17,7 +17,7 @@ setCount(MD5_CTX *ctx, uint64_t count)
+ }
+ 
+ /* Copy a ccdigest ctx into a legacy MD5 context */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ /*
+  * SWEET has no corecrypto kext (g_crypto_funcs stays NULL). MD5 uses
+  * BearSSL's portable implementation (libkern/crypto/sweet_md5.c), with
+diff --git a/libkern/crypto/corecrypto_sha1.c b/libkern/crypto/corecrypto_sha1.c
+index 409533d..821fa5e 100644
+--- a/libkern/crypto/corecrypto_sha1.c
++++ b/libkern/crypto/corecrypto_sha1.c
+@@ -16,7 +16,7 @@ setCount(SHA1_CTX *ctx, uint64_t count)
+ 	ctx->c.b64[0] = count;
+ }
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ /*
+  * SWEET has no corecrypto kext (g_crypto_funcs stays NULL). SHA-1 uses
+  * BearSSL's portable implementation (libkern/crypto/sweet_sha1.c), with
+diff --git a/libkern/crypto/corecrypto_sha2.c b/libkern/crypto/corecrypto_sha2.c
+index c954dd2..f7889f6 100644
+--- a/libkern/crypto/corecrypto_sha2.c
++++ b/libkern/crypto/corecrypto_sha2.c
+@@ -34,7 +34,7 @@
+ 
+ #if defined(CRYPTO_SHA2)
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ /*
+  * SWEET has no corecrypto kext, so g_crypto_funcs stays NULL. SHA-256 uses
+  * XNU's built-in implementation directly, as the SWEET PRNG does; this also
+@@ -84,7 +84,7 @@ SHA256_Final(void *digest, SHA256_CTX *ctx)
+ 	ccdigest_final(di, ctx->ctx, digest);
+ }
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/inc/bearssl_hash.h"
+ 
+ _Static_assert(sizeof(br_sha384_context) <= sizeof(SHA512_CTX),
+diff --git a/libkern/crypto/sweet_aes.c b/libkern/crypto/sweet_aes.c
+index 21be4eb..8dff751 100644
+--- a/libkern/crypto/sweet_aes.c
++++ b/libkern/crypto/sweet_aes.c
+@@ -4,7 +4,7 @@
+  * No heap, SIMD or CPU crypto extension is needed. Contexts can be copied:
+  * their only pointer is the immutable BearSSL class descriptor.
+  */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include <libkern/libkern.h>
+ #include <libkern/crypto/aes.h>
+ #include <corecrypto/ccmode.h>
+diff --git a/libkern/crypto/sweet_aes_ct.c b/libkern/crypto/sweet_aes_ct.c
+index 684003b..b40e3d1 100644
+--- a/libkern/crypto/sweet_aes_ct.c
++++ b/libkern/crypto/sweet_aes_ct.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/symcipher/aes_ct.c"
+ #endif
+diff --git a/libkern/crypto/sweet_aes_ct_cbcdec.c b/libkern/crypto/sweet_aes_ct_cbcdec.c
+index ea26fbb..afb8c3b 100644
+--- a/libkern/crypto/sweet_aes_ct_cbcdec.c
++++ b/libkern/crypto/sweet_aes_ct_cbcdec.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/symcipher/aes_ct_cbcdec.c"
+ #endif
+diff --git a/libkern/crypto/sweet_aes_ct_cbcenc.c b/libkern/crypto/sweet_aes_ct_cbcenc.c
+index 83ab8c3..22bb642 100644
+--- a/libkern/crypto/sweet_aes_ct_cbcenc.c
++++ b/libkern/crypto/sweet_aes_ct_cbcenc.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/symcipher/aes_ct_cbcenc.c"
+ #endif
+diff --git a/libkern/crypto/sweet_aes_ct_dec.c b/libkern/crypto/sweet_aes_ct_dec.c
+index 52e2d6a..7d2645f 100644
+--- a/libkern/crypto/sweet_aes_ct_dec.c
++++ b/libkern/crypto/sweet_aes_ct_dec.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/symcipher/aes_ct_dec.c"
+ #endif
+diff --git a/libkern/crypto/sweet_aes_ct_enc.c b/libkern/crypto/sweet_aes_ct_enc.c
+index 6827157..690abb4 100644
+--- a/libkern/crypto/sweet_aes_ct_enc.c
++++ b/libkern/crypto/sweet_aes_ct_enc.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/symcipher/aes_ct_enc.c"
+ #endif
+diff --git a/libkern/crypto/sweet_dec32be.c b/libkern/crypto/sweet_dec32be.c
+index 7415ae8..28e6437 100644
+--- a/libkern/crypto/sweet_dec32be.c
++++ b/libkern/crypto/sweet_dec32be.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/codec/dec32be.c"
+ #endif
+diff --git a/libkern/crypto/sweet_dec32le.c b/libkern/crypto/sweet_dec32le.c
+index cc0414e..7be9d2e 100644
+--- a/libkern/crypto/sweet_dec32le.c
++++ b/libkern/crypto/sweet_dec32le.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/codec/dec32le.c"
+ #endif
+diff --git a/libkern/crypto/sweet_dec64be.c b/libkern/crypto/sweet_dec64be.c
+index 15d924c..14f7164 100644
+--- a/libkern/crypto/sweet_dec64be.c
++++ b/libkern/crypto/sweet_dec64be.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/codec/dec64be.c"
+ #endif
+diff --git a/libkern/crypto/sweet_enc32be.c b/libkern/crypto/sweet_enc32be.c
+index 179919b..ff495d4 100644
+--- a/libkern/crypto/sweet_enc32be.c
++++ b/libkern/crypto/sweet_enc32be.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/codec/enc32be.c"
+ #endif
+diff --git a/libkern/crypto/sweet_enc32le.c b/libkern/crypto/sweet_enc32le.c
+index ab7dbd1..a8b5789 100644
+--- a/libkern/crypto/sweet_enc32le.c
++++ b/libkern/crypto/sweet_enc32le.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/codec/enc32le.c"
+ #endif
+diff --git a/libkern/crypto/sweet_enc64be.c b/libkern/crypto/sweet_enc64be.c
+index b9a8e87..2f619a2 100644
+--- a/libkern/crypto/sweet_enc64be.c
++++ b/libkern/crypto/sweet_enc64be.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/codec/enc64be.c"
+ #endif
+diff --git a/libkern/crypto/sweet_md5.c b/libkern/crypto/sweet_md5.c
+index 2832b92..8342637 100644
+--- a/libkern/crypto/sweet_md5.c
++++ b/libkern/crypto/sweet_md5.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/hash/md5.c"
+ #endif
+diff --git a/libkern/crypto/sweet_sha1.c b/libkern/crypto/sweet_sha1.c
+index 77365ed..5559528 100644
+--- a/libkern/crypto/sweet_sha1.c
++++ b/libkern/crypto/sweet_sha1.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/hash/sha1.c"
+ #endif
+diff --git a/libkern/crypto/sweet_sha2big.c b/libkern/crypto/sweet_sha2big.c
+index a405254..6edbaa9 100644
+--- a/libkern/crypto/sweet_sha2big.c
++++ b/libkern/crypto/sweet_sha2big.c
+@@ -1,4 +1,4 @@
+ /* BearSSL sources are fetched at an immutable commit by 0020-stage-bearssl.sh. */
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include "sweet_bearssl/src/hash/sha2big.c"
+ #endif
+diff --git a/osfmk/arm64/arm_vm_init.c b/osfmk/arm64/arm_vm_init.c
+index 06bb568..d3d006f 100644
+--- a/osfmk/arm64/arm_vm_init.c
++++ b/osfmk/arm64/arm_vm_init.c
+@@ -1825,7 +1825,7 @@ init_ptpages(tt_entry_t *tt, vm_map_address_t start, vm_map_address_t end, bool
+ #define ARM64_PHYSMAP_ALIGNMENT_PADDING (PTOV_TABLE_SIZE * ARM_TT_TWIG_SIZE)
+ #endif
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ /*
+  * The reserved low-globals/kernel region is excluded from VM allocation.
+  * Use the otherwise empty 32MB block above low globals and below gVirtBase
+@@ -1843,7 +1843,7 @@ sweet_early_map_final(void)
+ 	tt_entry_t *l2 = (tt_entry_t *)phystokv(l1 & ARM_TTE_TABLE_MASK);
+ 	tt_entry_t *slot = &l2[(va & ARM_TT_L2_INDEX_MASK) >> ARM_TT_L2_SHIFT];
+ 	assert(*slot == ARM_TTE_EMPTY);
+-	*slot = 0x9c000000ULL | ARM_TTE_VALID | ARM_TTE_TYPE_BLOCK |
++	*slot = (uint64_t)MACHINE_SPLASH_FB_BASE | ARM_TTE_VALID | ARM_TTE_TYPE_BLOCK |
+ 	    ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) |
+ 	    ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WRITECOMB) |
+ 	    ARM_TTE_BLOCK_AF | ARM_TTE_BLOCK_PNX | ARM_TTE_BLOCK_NX;
+@@ -2179,7 +2179,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 
+ 	arm_set_user_tbi();
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/* phystokv() must still refer to the bootstrap aperture here. */
+ 	sweet_early_map_final();
+ #endif
+@@ -2188,7 +2188,7 @@ arm_vm_init(uint64_t memory_size, boot_args * args)
+ 
+ 	ml_enable_monitor();
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/* The final TTBR1 is live; leave the outgoing VA=PA framebuffer alias. */
+ 	sweet_early_relocate(SWEET_EARLY_FB_VA);
+ #endif
+diff --git a/osfmk/arm64/cpu.c b/osfmk/arm64/cpu.c
+index b082a10..f9847ea 100644
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -922,7 +922,7 @@ cpu_start(int cpu)
+ 
+ 		flush_dcache((vm_offset_t)&CpuDataEntries[cpu], sizeof(cpu_data_entry_t), FALSE);
+ 		flush_dcache((vm_offset_t)cpu_data_ptr, sizeof(cpu_data_t), FALSE);
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 		/* The reset stub loads these through physical addresses with caches off.
+ 		 * Use VA range cleans to PoC, including on coherent-I/O builds. */
+ 		extern uint8_t bootstrap_pagetables[BOOTSTRAP_TABLE_SIZE];
+@@ -963,7 +963,7 @@ cpu_start(int cpu)
+ }
+ 
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ /* Bring-up observer: the self-SGI clears SIGPdisabled after IRQs unmask. */
+ boolean_t sweet_cpu_signal_is_enabled(unsigned int cpu);
+ boolean_t
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
+index 9bf660f..d2e301b 100644
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -1087,7 +1087,7 @@ ml_parse_cpu_topology(void)
+ 		}
+ #endif
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 		/* Aff1 encodes the core on SM7150, not an Apple cluster ID. */
+ 		cpu->die_cluster_id = (int)ml_readprop(child, "die-cluster-id", 0);
+ 		cpu->cluster_core_id = (int)ml_readprop(child, "cluster-core-id", cpu->phys_id >> 8);
+@@ -2180,7 +2180,7 @@ ml_get_decrementer(void)
+ 	return dec;
+ }
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ /*
+  * sweet: arm_vm_init() calls this unconditionally; Apple's definition (it
+  * enters the PPL/monitor) ships only in the closed per-SoC library. There is
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 57fdc48..7dd2269 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -515,10 +515,10 @@ LEXT(start_first_cpu)
+ 
+ #if defined(SWEET) || defined(PACMAN)
+ 	/* Stage 0: white 64x32 band, no stack or page tables needed. */
+-	MOV64	x0, (MACHINE_SPLASH_FB_BASE + 2368 * 4320)
++	MOV64	x0, (MACHINE_SPLASH_FB_BASE + (MACHINE_SPLASH_FB_HEIGHT - 32) * MACHINE_SPLASH_FB_STRIDE)
+ 	mov		w1, #-1
+ 	mov		x2, #32
+-	mov		x4, #4320
++	mov		x4, #MACHINE_SPLASH_FB_STRIDE
+ Lsweet_mark_row:
+ 	mov		x3, #64
+ 	mov		x5, x0
+diff --git a/osfmk/arm64/sweet_early.c b/osfmk/arm64/sweet_early.c
+index 6928957..9e4ecb0 100644
+--- a/osfmk/arm64/sweet_early.c
++++ b/osfmk/arm64/sweet_early.c
+@@ -7,15 +7,15 @@
+  */
+ #include <arm64/sweet_early.h>
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ #include <stdint.h>
+ #include <kern/misc_protos.h>
+ 
+-static volatile uint32_t *early_fb = (volatile uint32_t *)(uintptr_t)0x9c000000;
++static volatile uint32_t *early_fb = (volatile uint32_t *)(uintptr_t)MACHINE_SPLASH_FB_BASE;
+ #define EARLY_FB early_fb
+-#define EARLY_WIDTH 1080u
+-#define EARLY_HEIGHT 2400u
+-#define EARLY_STRIDE (4320u / 4)
++#define EARLY_WIDTH MACHINE_SPLASH_FB_WIDTH
++#define EARLY_HEIGHT MACHINE_SPLASH_FB_HEIGHT
++#define EARLY_STRIDE (MACHINE_SPLASH_FB_STRIDE / 4)
+ #define EARLY_SCALE 2u
+ #define EARLY_CELL_W (8u * EARLY_SCALE)
+ #define EARLY_CELL_H (16u * EARLY_SCALE)
+diff --git a/osfmk/arm64/sweet_early.h b/osfmk/arm64/sweet_early.h
+index d7a25f2..c0ed994 100644
+--- a/osfmk/arm64/sweet_early.h
++++ b/osfmk/arm64/sweet_early.h
+@@ -6,7 +6,7 @@
+ #include <stdarg.h>
+ #include <stdint.h>
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ void sweet_early_mark(unsigned int stage, const char *label);
+ void sweet_early_putc(char c);
+ void sweet_early_panic(const char *fmt, va_list *args);
+diff --git a/osfmk/kern/debug.c b/osfmk/kern/debug.c
+index 437adb1..49b64ce 100644
+--- a/osfmk/kern/debug.c
++++ b/osfmk/kern/debug.c
+@@ -1072,7 +1072,7 @@ panic_trap_to_debugger(const char *panic_format_str, va_list *panic_args, unsign
+ {
+ #pragma clang diagnostic pop
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/* No CPU/thread/debugger state is required for this first panic copy. */
+ 	sweet_early_panic(panic_format_str, panic_args);
+ #endif
+diff --git a/osfmk/kern/exception.c b/osfmk/kern/exception.c
+index a20a764..f3784eb 100644
+--- a/osfmk/kern/exception.c
++++ b/osfmk/kern/exception.c
+@@ -820,7 +820,7 @@ exception_triage(
+ 	return exception_triage_thread(exception, code, codeCnt, thread);
+ }
+ 
+-#if defined(ARM64_BOARD_CONFIG_SWEET)
++#if defined(ARM64_BOARD_CONFIG_SWEET) || defined(ARM64_BOARD_CONFIG_PACMAN)
+ #include <vm/vm_shared_region.h>
+ #include <arm/thread.h>
+ 
+diff --git a/osfmk/prng/entropy.c b/osfmk/prng/entropy.c
+index 42286ed..4801ba4 100644
+--- a/osfmk/prng/entropy.c
++++ b/osfmk/prng/entropy.c
+@@ -40,7 +40,7 @@
+ #include <machine/machine_routines.h>
+ #include <libkern/section_keywords.h>
+ #include <sys/cdefs.h>
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ #include <corecrypto/ccdigest.h>
+ #include <corecrypto/ccsha2.h>
+ #endif
+@@ -97,7 +97,7 @@ typedef struct entropy_data {
+ 	// State for a SHA256 computation. This is used to accumulate
+ 	// entropy samples from across all CPUs. It is finalized when
+ 	// entropy is provided to the consumer of this module.
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	ccdigest_ctx_decl(CCSHA256_STATE_SIZE, CCSHA256_BLOCK_SIZE, sha256_ctx);
+ #else
+ 	SHA256_CTX sha256_ctx;
+@@ -482,7 +482,7 @@ entropy_health_test(uint32_t sample_count, entropy_sample_t *samples, __assert_o
+ static void
+ entropy_hash_init(void)
+ {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	ccdigest_init(&ccsha256_ltc_di, entropy_data.sha256_ctx);
+ #else
+ 	SHA256_Init(&entropy_data.sha256_ctx);
+@@ -492,7 +492,7 @@ entropy_hash_init(void)
+ static void
+ entropy_hash_update(const void *data, size_t nbytes)
+ {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	ccdigest_update(&ccsha256_ltc_di, entropy_data.sha256_ctx, nbytes, data);
+ #else
+ 	SHA256_Update(&entropy_data.sha256_ctx, data, nbytes);
+@@ -502,7 +502,7 @@ entropy_hash_update(const void *data, size_t nbytes)
+ static void
+ entropy_hash_final(void *out)
+ {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	ccdigest_final(&ccsha256_ltc_di, entropy_data.sha256_ctx, out);
+ 	ccdigest_ctx_clear(CCSHA256_STATE_SIZE, CCSHA256_BLOCK_SIZE, entropy_data.sha256_ctx);
+ #else
+@@ -524,7 +524,7 @@ entropy_provide(size_t *entropy_size, void *entropy, __unused void *arg)
+ 
+ 	// Apple platforms need the corecrypto kext's SHA256 implementation.
+ 	// SWEET links the digest into the kernel instead.
+-#if !defined(SWEET)
++#if !defined(SWEET) && !defined(PACMAN)
+ 	if (__improbable(!crypto_init)) {
+ 		return sample_count;
+ 	}
+diff --git a/osfmk/prng/prng_random.c b/osfmk/prng/prng_random.c
+index c53d45d..0d5e60f 100644
+--- a/osfmk/prng/prng_random.c
++++ b/osfmk/prng/prng_random.c
+@@ -145,7 +145,7 @@ static struct {
+ 		     .strictFIPS = 0,
+ 	     }};
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ /*
+  * The corecrypto kext normally installs the kernel PRNG. SWEET has no such
+  * kext: use the built-in HMAC-SHA256 DRBG, just as early_random does. A
+@@ -473,7 +473,7 @@ int
+ write_random(void * buffer, u_int numbytes)
+ {
+ 	uint8_t seed[SHA256_DIGEST_LENGTH];
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	/* Hash without depending on the absent corecrypto kext's dispatch table. */
+ 	const struct ccdigest_info *di = &ccsha256_ltc_di;
+ 	ccdigest_di_decl(di, ctx);
+diff --git a/osfmk/vm/vm_kern.c b/osfmk/vm/vm_kern.c
+index 54edb01..8de085b 100644
+--- a/osfmk/vm/vm_kern.c
++++ b/osfmk/vm/vm_kern.c
+@@ -2439,7 +2439,7 @@ kmem_sizeclass_init(void)
+ 	}
+ }
+ 
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ /*
+  * No corecrypto kext is loaded on SWEET yet. The kmem RNG contract permits
+  * a non-cryptographic generator and requires lock-free generation. Keep
+@@ -2485,7 +2485,7 @@ __startup_func
+ static void
+ kmem_crypto_init(void)
+ {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 	vm_size_t ctx_size = sizeof(struct sweet_kmem_rng);
+ #else
+ 	vm_size_t ctx_size = crypto_random_kmem_ctx_size();
+@@ -2496,7 +2496,7 @@ kmem_crypto_init(void)
+ 
+ 		ks->ks_rng_ctx = zalloc_percpu_permanent(ctx_size, ZALIGN_PTR);
+ 		zpercpu_foreach(ctx, ks->ks_rng_ctx) {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 			((struct sweet_kmem_rng *)ctx)->state = early_random();
+ #else
+ 			crypto_random_kmem_init(ctx);
+@@ -2765,7 +2765,7 @@ kmem_get_next_slot(
+ 		 */
+ 		slot_idx = kmem_get_random16((uint16_t)num_slots - 1);
+ 	} else {
+-#if defined(SWEET)
++#if defined(SWEET) || defined(PACMAN)
+ 		slot_idx = sweet_kmem_uniform(zpercpu_get(sizeclass.ks_rng_ctx), num_slots);
+ #else
+ 		crypto_random_uniform(zpercpu_get(sizeclass.ks_rng_ctx), num_slots,
+diff --git a/pexpert/pexpert/arm64/PACMAN.h b/pexpert/pexpert/arm64/PACMAN.h
+index 6218284..7aa98b9 100644
+--- a/pexpert/pexpert/arm64/PACMAN.h
++++ b/pexpert/pexpert/arm64/PACMAN.h
+@@ -71,6 +71,9 @@
+  * panel scanning out from here; measured from /chosen/atag,videolfb-fb_base.
+  */
+ #define MACHINE_SPLASH_FB_BASE    0xfe06c000
++#define MACHINE_SPLASH_FB_WIDTH   1084
++#define MACHINE_SPLASH_FB_HEIGHT  2412
++#define MACHINE_SPLASH_FB_STRIDE  4336
+ 
+ #define GIC_SPURIOUS_IRQ          1023    // IRQ no. for GIC spurious interrupt
+ 
+diff --git a/pexpert/pexpert/arm64/SWEET.h b/pexpert/pexpert/arm64/SWEET.h
+index 6e610e0..7253c69 100644
+--- a/pexpert/pexpert/arm64/SWEET.h
++++ b/pexpert/pexpert/arm64/SWEET.h
+@@ -56,6 +56,9 @@
+  * the panel scanning out from here.
+  */
+ #define MACHINE_SPLASH_FB_BASE    0x9c000000
++#define MACHINE_SPLASH_FB_WIDTH   1080
++#define MACHINE_SPLASH_FB_HEIGHT  2400
++#define MACHINE_SPLASH_FB_STRIDE  4320
+ 
+ #define GIC_SPURIOUS_IRQ          1023    // IRQ no. for GIC spurious interrupt
+ 

@@ -1,9 +1,10 @@
 #!/bin/bash
-# Stage Apple's open source HFS for the SWEET built-in filesystem (bsd/sweet_hfs).
-# dxb runs patches/*.sh from the XNU source root before applying *.patch.
+# Stage Apple's open source HFS for the SWEET/PACMAN built-in filesystem
+# (bsd/sweet_hfs). dxb runs patches/*.sh from the XNU source root before
+# applying *.patch.
 set -euo pipefail
 
-[[ "${MACHINE_CONFIG:-}" == SWEET ]] || exit 0
+[[ "${MACHINE_CONFIG:-}" == SWEET || "${MACHINE_CONFIG:-}" == PACMAN ]] || exit 0
 [[ "${MACOS_VERSION:-}" == 13.5 ]] || {
     echo 'SWEET HFS integration requires xnu-8796.141.3 (macOS 13.5)' >&2
     exit 1
@@ -52,4 +53,4 @@ PY
 # Kernel builds use -nostdinc; HFS's kext-config.h needs the SDK's target macros.
 hfs_sdk=$(xcrun --sdk macosx --show-sdk-path)
 cp "$hfs_sdk/usr/include/TargetConditionals.h" bsd/sweet_hfs/
-echo "Staged hfs-627.100.6 ($hfs_sha) for SWEET"
+echo "Staged hfs-627.100.6 ($hfs_sha) for ${MACHINE_CONFIG}"
