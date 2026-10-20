@@ -124,11 +124,19 @@ def macho_find_symbol(path, symbol):
         off += size
     if symtab is None:
         return []
-    symoff, nsyms, stroff, _ = symtab
+    symoff, nsyms, stroff, strsize = symtab
     out = []
     for i in range(nsyms):
         n_strx, _, _, _, n_value = struct.unpack_from('<IBBHQ', d, symoff + 16 * i)
-        if d[stroff + n_strx:].split(b'\0')[0].decode(errors='replace') == symbol:
+        # Bound the name lookup to the string table: slicing to the end of the
+        # file for each of ~70k symbols copies gigabytes and looked like a hang.
+        start = stroff + n_strx
+        if n_strx >= strsize:
+            continue
+        end = d.find(b'\0', start, stroff + strsize)
+        if end < 0:
+            continue
+        if d[start:end].decode(errors='replace') == symbol:
             out.append(n_value)
     return out
 

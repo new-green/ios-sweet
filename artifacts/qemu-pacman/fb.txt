@@ -1,0 +1,75 @@
+Serial requested, consistent debug disabled or debug boot arg not p
+resent, configuring debugging over serial
+iBoot version: pacman-shim
+"name" not a kext
+"AAPL,phandle" not a kext
+SWEET AMFI: built-in interface registered (XML entitlements)
+calling mpo_policy_init for vnguard
+Security policy loaded: Guarded vnode policy (vnguard)
+SWEET: trust caches unavailable (Image4/AMFI not installed)
+keepsyms boot arg specified; keeping linkedit segment for symbols.
+No POST boot-arg set.
+SWEET: starting device-tree platform expert
+Couldn't alloc class "AppleKeyStore"
+Couldn't alloc class "IOWatchdog"
+Couldn't alloc class "IOCoreSurfaceRoot"
+SWEET CPU: requested=1 selected=1 (limit=8)
+SWEET CPU: cpu=0 mpidr=0x0 came alive; SGI1 OK
+Copyright (c) 1982, 1986, 1989, 1991, 1993
+ The Regents of the University of California. All rights reserved.
+
+MAC Framework successfully initialized
+using 941 buffer headers and 941 cluster IO buffer headers
+SWEET CPU: 1/1 CPUs initialized, SGI1 verified
+SWEET: platform expert registered
+Couldn't alloc class "AppleCLCD"
+Couldn't alloc class "SweetBattery"
+SWEET HID: buttons registered (test every 0 s)
+SWEET HID: touch registered
+Couldn't alloc class "AppleKeyStore"
+Couldn't alloc class "IOWatchdog"
+Couldn't alloc class "IOCoreSurfaceRoot"
+Couldn't alloc class "SweetBattery"
+ktriage_register_subsystem_strings: set subsystem 8 strings
+calling mpo_policy_init for SWEET AMFI
+Security policy loaded: SWEET built-in Mobile File Integrity (SWEET
+ AMFI)
+SWEET AMFI: platform binary policy registered (0)
+calling mpo_policy_init for Sandbox
+Security policy loaded: SWEET permissive sandbox stand-in (Sandbox)
+SWEET Sandbox: permissive policy registered (0)
+SWEET HFS: hfs-627.100.6 registered
+mcache: 1 CPU(s), 64 bytes CPU cache line size
+mbinit: done [64 MB total pool size, (42/21) split]
+dlil_init: Waiting for all the create dlil kernel threads to get sc
+heduled at least once.
+Couldn't alloc class "AppleKeyStore"
+Couldn't alloc class "IOWatchdog"
+Couldn't alloc class "IOCoreSurfaceRoot"
+Couldn't alloc class "SweetBattery"
+dlil_init: All the created dlil kernel threads have been scheduled
+at least once. Proceeding.
+ifnet_attach: All kernel threads created for interface lo0 have bee
+n scheduled at least once. Proceeding.
+ifnet_attach: Waiting for all kernel threads created for interface
+gif0 to get scheduled at least once.
+Couldn't alloc class "AppleKeyStore"
+Couldn't alloc class "IOWatchdog"
+Couldn't alloc class "IOCoreSurfaceRoot"
+Couldn't alloc class "SweetBattery"
+ifnet_attach: All kernel threads created for interface gif0 have be
+en scheduled at least once. Proceeding.
+skip attaching fsw to lo0 using legacy TX modelifnet_attach: Waitin
+g for all kernel threads created for interface stf0 to get schedule
+d at least once.
+ifnet_attach: All kernel threads created for interface stf0 have be
+en scheduled at least once. Proceeding.
+Waiting on <dict ID="0"><key>IOProviderClass</key><string ID="1">IO
+Media</string><key>Content</key><string ID="2">Apple_HFS</string></
+dict>
+
+
+mig_table_max_displ = 54 mach_kobj_count = 374
+debug_log_init: Error!! gPanicBase is still not initialized
+debug_log_init: Error!! gPanicBase is still not initialized
+kdp_core zlib memory 0x8000
